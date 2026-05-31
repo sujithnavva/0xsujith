@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SUJITH NAVVA // SECURITY ENGINEER</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green: #00ff88;
+    --green-dim: #00cc6a;
+    --green-dark: #004422;
+    --green-glow: rgba(0,255,136,0.15);
+    --red: #ff4444;
+    --amber: #ffaa00;
+    --cyan: #00ffff;
+    --muted: #4a7a5a;
+    --bg: #050f0a;
+    --bg2: #081410;
+    --border: rgba(0,255,136,0.2);
+    --font: 'JetBrains Mono', 'Share Tech Mono', monospace;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    overflow: hidden;
+  }
+
+  /* CRT scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Vignette */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  /* ── BOOT SCREEN ── */
+  #boot {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  #boot-log {
+    width: 100%;
+    max-width: 680px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+
+  #boot-log .line { opacity: 0; }
+  #boot-log .ok   { color: var(--green); }
+  #boot-log .warn { color: var(--amber); }
+  #boot-log .err  { color: var(--red); }
+  #boot-log .hi   { color: var(--cyan); }
+
+  /* ── AUTH SCREEN ── */
+  #auth {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 900;
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem;
+  }
+
+  .auth-box {
+    border: 1px solid var(--green);
+    padding: 2.5rem 3rem;
+    max-width: 500px;
+    width: 100%;
+    box-shadow: 0 0 40px var(--green-glow), inset 0 0 40px rgba(0,255,136,0.02);
+    animation: flicker 8s infinite;
+  }
+
+  .auth-title {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+  }
+
+  .auth-alert {
+    color: var(--red);
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+  }
+
+  .auth-alert span { color: var(--amber); }
+
+  .auth-sub {
+    color: var(--muted);
+    font-size: 12px;
+    margin-bottom: 2rem;
+    line-height: 1.7;
+  }
+
+  .auth-prompt {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1.2rem;
+  }
+
+  .auth-label {
+    color: var(--amber);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  #auth-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    flex: 1;
+    caret-color: var(--green);
+    letter-spacing: 0.1em;
+  }
+
+  .auth-hint {
+    margin-top: 1rem;
+    font-size: 11px;
+    color: var(--muted);
+    opacity: 0.7;
+  }
+
+  .auth-error {
+    margin-top: 0.8rem;
+    font-size: 12px;
+    color: var(--red);
+    min-height: 1.2rem;
+  }
+
+  /* ── MAIN TERMINAL ── */
+  #terminal {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem;
+  }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .topbar-left { font-size: 11px; color: var(--muted); letter-spacing: 0.15em; }
+  .topbar-left span { color: var(--green); }
+  .topbar-right { font-size: 11px; color: var(--muted); }
+  .topbar-status { display: flex; gap: 1rem; }
+  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--green); margin-right: 5px; animation: pulse 2s infinite; }
+
+  /* Output area */
+  #output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted) transparent;
+  }
+
+  #output::-webkit-scrollbar { width: 4px; }
+  #output::-webkit-scrollbar-thumb { background: var(--muted); }
+
+  /* Input row */
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .prompt-str { color: var(--green); font-size: 13px; white-space: nowrap; }
+  .prompt-str .at { color: var(--cyan); }
+  .prompt-str .path { color: var(--amber); }
+
+  #cmd-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--green);
+    font-family: var(--font);
+    font-size: 14px;
+    caret-color: var(--green);
+  }
+
+  /* Autocomplete */
+  #autocomplete {
+    position: fixed;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 0.4rem 0;
+    display: none;
+    z-index: 100;
+    min-width: 200px;
+    max-width: 400px;
+  }
+
+  .ac-item {
+    padding: 0.3rem 1rem;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .ac-item:hover, .ac-item.active { background: var(--green-dark); color: var(--green); }
+  .ac-item .ac-cmd { color: var(--green); margin-right: 0.5rem; }
+  .ac-item .ac-desc { font-size: 11px; }
+
+  /* ── OUTPUT ELEMENTS ── */
+  .out-line {
+    line-height: 1.7;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .out-cmd {
+    color: var(--green);
+    font-size: 13px;
+    margin: 0.6rem 0 0.2rem;
+  }
+  .out-cmd .prompt-echo { color: var(--muted); }
+
+  .out-section-title {
+    color: var(--green);
+    font-size: 15px;
+    font-weight: 700;
+    margin: 0.8rem 0 0.5rem;
+    letter-spacing: 0.08em;
+  }
+
+  .out-label { color: var(--cyan); }
+  .out-value { color: #c8ffd8; }
+  .out-dim   { color: var(--muted); }
+  .out-green { color: var(--green); }
+  .out-amber { color: var(--amber); }
+  .out-red   { color: var(--red); }
+  .out-cyan  { color: var(--cyan); }
+  .out-white { color: #e0ffe8; }
+
+  .out-divider {
+    color: var(--muted);
+    font-size: 12px;
+    margin: 0.3rem 0;
+    opacity: 0.5;
+  }
+
+  .tag {
+    display: inline-block;
+    border: 1px solid var(--border);
+    color: var(--green-dim);
+    font-size: 11px;
+    padding: 1px 8px;
+    margin: 2px 3px 2px 0;
+    border-radius: 2px;
+  }
+
+  .tag.red   { border-color: rgba(255,68,68,0.4); color: #ff8888; }
+  .tag.amber { border-color: rgba(255,170,0,0.4); color: var(--amber); }
+  .tag.cyan  { border-color: rgba(0,255,255,0.3); color: var(--cyan); }
+
+  .exp-block {
+    border-left: 2px solid var(--green-dark);
+    padding-left: 1rem;
+    margin: 0.8rem 0;
+  }
+
+  .exp-block:hover { border-left-color: var(--green); }
+
+  .proj-block {
+    border: 1px solid var(--border);
+    padding: 0.8rem 1rem;
+    margin: 0.6rem 0;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .proj-block:hover {
+    border-color: var(--green);
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+
+  .skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.6rem;
+    margin: 0.5rem 0;
+  }
+
+  .skill-cat {
+    border: 1px solid var(--border);
+    padding: 0.6rem 0.8rem;
+  }
+
+  .skill-cat-title {
+    font-size: 11px;
+    color: var(--cyan);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.4rem;
+    text-transform: uppercase;
+  }
+
+  .skill-item {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.9;
+  }
+  .skill-item::before { content: '▸ '; color: var(--green-dim); }
+
+  .ascii-art {
+    color: var(--green);
+    font-size: 11px;
+    line-height: 1.3;
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+  }
+
+  .help-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 0.2rem;
+    margin: 0.15rem 0;
+    font-size: 13px;
+  }
+  .help-cmd { color: var(--green); }
+  .help-desc { color: var(--muted); }
+
+  /* Animations */
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  @keyframes flicker {
+    0%,19%,21%,23%,25%,54%,56%,100% { opacity: 1; }
+    20%,24%,55% { opacity: 0.95; }
+  }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+  @keyframes scanIn { from{clip-path:inset(0 0 100% 0)} to{clip-path:inset(0 0 0% 0)} }
+
+  .fade-in { animation: fadeIn 0.3s ease both; }
+
+  .clock { font-size: 11px; color: var(--muted); }
+
+  /* Mobile */
+  @media (max-width: 600px) {
+    html, body { font-size: 12px; }
+    .auth-box { padding: 1.5rem; }
+    .skill-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     BOOT SCREEN
+════════════════════════════════════════════ -->
+<div id="boot">
+  <div id="boot-log"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     AUTH SCREEN
+════════════════════════════════════════════ -->
+<div id="auth">
+  <div class="auth-box">
+    <div class="auth-title">// SYSTEM ALERT — UNAUTHORIZED ACCESS DETECTED</div>
+    <div class="auth-alert">⚠ INTRUSION DETECTED <span>— IDENTITY VERIFICATION REQUIRED</span></div>
+    <div class="auth-sub">
+      An unrecognized entity has attempted to access this secured node.<br>
+      Clearance level: <span style="color:var(--red)">UNKNOWN</span> &nbsp;|&nbsp;
+      Origin: <span id="visitor-ip" style="color:var(--amber)">resolving...</span><br><br>
+      State your access code to proceed. All sessions are logged.
+    </div>
+    <div class="auth-prompt">
+      <div class="auth-label">ACCESS_CODE&gt;&nbsp;</div>
+      <input id="auth-input" type="text" autocomplete="off" spellcheck="false" placeholder="enter passphrase" autofocus />
+    </div>
+    <div class="auth-error" id="auth-error"></div>
+    <div class="auth-hint">hint: try &nbsp;<span style="color:var(--green)">access granted</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN TERMINAL
+════════════════════════════════════════════ -->
+<div id="terminal">
+  <div class="topbar">
+    <div class="topbar-left">
+      <span>sujith@sec-node</span>:~$ &nbsp;|&nbsp; SESSION ACTIVE
+    </div>
+    <div class="topbar-status">
+      <span><span class="status-dot"></span><span style="font-size:11px;color:var(--muted)">SECURE</span></span>
+      <span class="clock" id="clock"></span>
+    </div>
+  </div>
+
+  <div id="output"></div>
+
+  <div id="autocomplete"></div>
+
+  <div class="input-row">
+    <span class="prompt-str">
+      <span class="at">visitor</span>@<span>sec-node</span>:<span class="path">~/sujith</span>$&nbsp;
+    </span>
+    <input id="cmd-input" type="text" autocomplete="off" spellcheck="false" placeholder="type a command..." />
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════
+const DATA = {
+  whoami: {
+    name: "Sujith Kumar Navva",
+    title: "Security Engineer",
+    location: "Singapore",
+    email: "kumarsujith565@gmail.com",
+    phone: "+65 98854920",
+    web: "https://sujithnavva.github.io/sujith.me/",
+    summary: "Security Engineer with 3+ years of experience in Cloud Security, Threat Detection, and Application Security within the Singapore banking and enterprise sectors. Expert in deploying enterprise-grade XDR and SIEM solutions, architecting Zero-Trust PAM integrations, and conducting deep-dive malware analysis. Pursuing M.Sc. Cybersecurity at NTU."
+  },
+  experience: [
+    {
+      role: "Cybersecurity Engineer",
+      org: "Network for Electronic Transfers (NETS)",
+      location: "Singapore",
+      period: "05/2025 — Present",
+      highlights: [
+        "Led enterprise-wide XDR rollout (Trend Micro Vision One) across 1,000+ endpoints — reduced MTTD by 60%",
+        "Implemented BeyondTrust PAM with dual-control enforcement and centralized privilege governance",
+        "Integrated Amazon Security Lake with ELK Stack for cross-platform threat correlation",
+        "Deployed AWS Macie across enterprise S3 for automated PII discovery & compliance reporting",
+        "Recovered LogRhythm SIEM from critical infrastructure failure — 100% monitoring continuity maintained",
+        "Developed Python/Java scripts for automated compliance validation — 30% efficiency gain",
+        "Conducted vulnerability assessments using Tenable Nessus across hybrid environments"
+      ],
+      tags: ["XDR","PAM","SIEM","Cloud Security","Python","Compliance"]
+    },
+    {
+      role: "Application Security Engineer (L2) / Developer",
+      org: "Development Bank of Singapore (DBS)",
+      location: "Singapore",
+      period: "07/2022 — 08/2024",
+      highlights: [
+        "Conducted internal pentesting on banking web and mobile apps — identified critical auth & API vulnerabilities",
+        "Utilized IDA Pro and BinDiff to reverse-engineer banking malware and develop defensive signatures",
+        "Developed PoCs for OAuth token theft and implemented token binding + request signing mitigations",
+        "Built secure banking features in React.js/Java — 100% alignment with MAS TRM & OWASP",
+        "Provided 24/7 support during MAS resilience exercises and prepared audit-ready forensic documentation",
+        "Developed Cards & Cashline domains for DBS iBanking and Mobile Banking platforms"
+      ],
+      tags: ["AppSec","Pentesting","Malware Analysis","IDA Pro","React.js","MAS TRM"]
+    }
+  ],
+  skills: {
+    "Threat Detection": ["ELK Stack","LogRhythm SIEM","MITRE ATT&CK","Threat Hunting","Trend Micro Vision One (XDR)"],
+    "Identity & Access": ["AWS IAM","BeyondTrust PAM","Privileged Access Mgmt","Zero-Trust"],
+    "AppSec & Forensics": ["API Security","BinDiff","IDA Pro","Malware Analysis","OWASP Top 10","Pentesting","Reverse Engineering"],
+    "Cloud & Infra": ["AWS (Security Lake, Macie)","Azure","Docker","GCP","Jenkins"],
+    "Compliance": ["ISO 27001","MAS TRM","PCI-DSS","SOX"],
+    "Languages": ["Bash","Java","PowerShell","Python","TypeScript"]
+  },
+  projects: [
+    {
+      name: "Enterprise XDR Rollout",
+      org: "NETS Group",
+      desc: "Automated threat response for 2,000+ systems/endpoints using Trend Micro Vision One. Reduced MTTD by 60% across the enterprise.",
+      tags: ["XDR","Trend Micro","Automation","Endpoint Security"]
+    },
+    {
+      name: "Hybrid Cloud PAM Transformation",
+      org: "NETS Group",
+      desc: "Extended on-prem PAM to cloud workloads using One-Way Domain Trust and Domain Join architecture. Enforced enterprise-wide Dual-Control requiring second-level approval for high-risk admin actions.",
+      tags: ["BeyondTrust","PAM","Zero-Trust","Cloud","Identity"]
+    },
+    {
+      name: "Threat Intel Honeypots",
+      org: "Personal Project",
+      desc: "Designed Azure/GCP honeypots integrated with ELK Stack for real-time threat intelligence gathering and attacker infrastructure mapping.",
+      tags: ["Honeypot","Azure","GCP","ELK","Threat Intel"]
+    },
+    {
+      name: "DBS Internet & Mobile Banking — Cards Domain",
+      org: "DBS Bank",
+      desc: "Developed and optimized the Cards & Cashline domains for iBanking and Mobile Banking platforms. Engineered intelligent fund structures and interactive carousel features with 100% compliance to MAS TRM.",
+      tags: ["AppSec","React.js","Java","MAS TRM","PCI-DSS"]
+    }
+  ],
+  certifications: [
+    { name: "AWS Certified Security – Specialty", status: "In Progress", issuer: "Amazon Web Services" },
+    { name: "M.Sc. Cybersecurity", status: "08/2024 — 01/2026", issuer: "Nanyang Technological University (NTU)" },
+    { name: "B.Tech Computer Science Engineering", status: "06/2018 — 09/2022", issuer: "SRM Institute of Science & Technology" }
+  ],
+  contact: {
+    email: "kumarsujith565@gmail.com",
+    phone: "+65 98854920",
+    location: "Singapore",
+    github: "https://github.com/sujithnavva",
+    web: "https://sujithnavva.github.io/sujith.me/"
+  }
+};
+
+// ═══════════════════════════════════════════
+// COMMANDS
+// ═══════════════════════════════════════════
+const COMMANDS = {
+  help:    { desc: "list all available commands" },
+  whoami:  { desc: "identity & summary" },
+  skills:  { desc: "technical skill matrix" },
+  exp:     { desc: "work experience timeline" },
+  projects:{ desc: "notable security projects" },
+  certs:   { desc: "certifications & education" },
+  contact: { desc: "get in touch" },
+  clear:   { desc: "clear terminal output" },
+  banner:  { desc: "show welcome banner" },
+};
+
+// ═══════════════════════════════════════════
+// BOOT SEQUENCE
+// ═══════════════════════════════════════════
+const bootLines = [
+  { text: "BIOS v2.3.1 — Initializing secure boot sequence...", cls: "", delay: 0 },
+  { text: "[ OK ] Memory integrity check passed                (16384 MB)", cls: "ok", delay: 120 },
+  { text: "[ OK ] Kernel modules loaded                        (sec-core v5.15)", cls: "ok", delay: 220 },
+  { text: "[ OK ] Firewall rules applied                       (iptables + nftables)", cls: "ok", delay: 340 },
+  { text: "[ OK ] Encrypted volumes mounted                    (AES-256-XTS)", cls: "ok", delay: 460 },
+  { text: "[ OK ] IDS/IPS engine started                       (Snort 3.0)", cls: "ok", delay: 580 },
+  { text: "[WARN] Unknown connection attempt detected          (external origin)", cls: "warn", delay: 780 },
+  { text: "[WARN] Unrecognized entity at network boundary      (no clearance record)", cls: "warn", delay: 920 },
+  { text: "[ !! ] ALERT: Unauthorized access attempt logged    (escalating...)", cls: "err", delay: 1100 },
+  { text: "[ >> ] Launching identity verification module...    (auth.d v4.1)", cls: "hi", delay: 1350 },
+];
+
+function runBoot() {
+  const log = document.getElementById('boot-log');
+  bootLines.forEach(({ text, cls, delay }) => {
+    setTimeout(() => {
+      const div = document.createElement('div');
+      div.className = `line ${cls}`;
+      div.textContent = text;
+      div.style.animation = 'fadeIn 0.2s ease both';
+      log.appendChild(div);
+      log.scrollTop = log.scrollHeight;
+    }, delay);
+  });
+  setTimeout(() => {
+    document.getElementById('boot').style.transition = 'opacity 0.5s';
+    document.getElementById('boot').style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('boot').style.display = 'none';
+      showAuth();
+    }, 500);
+  }, 2000);
+}
+
+// ═══════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════
+function showAuth() {
+  const auth = document.getElementById('auth');
+  auth.style.display = 'flex';
+  setTimeout(() => document.getElementById('auth-input').focus(), 100);
+
+  // Fake IP
+  const fakeIP = `${rand(100,220)}.${rand(10,250)}.${rand(1,250)}.${rand(1,250)}`;
+  document.getElementById('visitor-ip').textContent = fakeIP;
+
+  let attempts = 0;
+  const input = document.getElementById('auth-input');
+  const errEl = document.getElementById('auth-error');
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const val = input.value.trim().toLowerCase();
+    if (val === 'access granted' || val === 'access_granted' || val === 'sujith' || val === 'granted') {
+      errEl.style.color = 'var(--green)';
+      errEl.textContent = '✓ Identity verified. Access granted. Establishing secure session...';
+      input.disabled = true;
+      setTimeout(() => {
+        auth.style.transition = 'opacity 0.5s';
+        auth.style.opacity = '0';
+        setTimeout(() => {
+          auth.style.display = 'none';
+          launchTerminal();
+        }, 500);
+      }, 1000);
+    } else {
+      attempts++;
+      input.value = '';
+      errEl.style.color = 'var(--red)';
+      if (attempts === 1) errEl.textContent = `✗ Access denied. Passphrase mismatch. (${3 - attempts} attempts remaining)`;
+      else if (attempts === 2) errEl.textContent = `✗ Access denied. Initiating trace... (1 attempt remaining)`;
+      else if (attempts >= 3) {
+        errEl.textContent = `✗ Too many failed attempts. Hint: type exactly "access granted"`;
+      }
+      // shake
+      const box = document.querySelector('.auth-box');
+      box.style.transform = 'translateX(-8px)';
+      setTimeout(() => box.style.transform = 'translateX(8px)', 80);
+      setTimeout(() => box.style.transform = '', 160);
+    }
+  });
+}
+
+// ═══════════════════════════════════════════
+// TERMINAL
+// ═══════════════════════════════════════════
+function launchTerminal() {
+  const term = document.getElementById('terminal');
+  term.style.display = 'flex';
+  startClock();
+  printBanner();
+  printHelp(true);
+  document.getElementById('cmd-input').focus();
+}
+
+function startClock() {
+  const el = document.getElementById('clock');
+  function tick() {
+    const now = new Date();
+    el.textContent = now.toISOString().replace('T',' ').substring(0,19) + ' SGT';
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+const output = () => document.getElementById('output');
+
+function print(html, cls = '') {
+  const div = document.createElement('div');
+  div.className = `out-line fade-in ${cls}`;
+  div.innerHTML = html;
+  output().appendChild(div);
+  output().scrollTop = output().scrollHeight;
+}
+
+function printRaw(html) {
+  const div = document.createElement('div');
+  div.className = 'fade-in';
+  div.innerHTML = html;
+  output().appendChild(div);
+  output().scrollTop = output().scrollHeight;
+}
+
+function printBanner() {
+  printRaw(`
+<div class="ascii-art">
+ ███████╗██╗   ██╗     ██╗██╗████████╗██╗  ██╗
+ ██╔════╝██║   ██║     ██║██║╚══██╔══╝██║  ██║
+ ███████╗██║   ██║     ██║██║   ██║   ███████║
+ ╚════██║██║   ██║██   ██║██║   ██║   ██╔══██║
+ ███████║╚██████╔╝╚█████╔╝██║   ██║   ██║  ██║
+ ╚══════╝ ╚═════╝  ╚════╝ ╚═╝   ╚═╝   ╚═╝  ╚═╝</div>
+<div class="out-line"><span class="out-green">// SECURE NODE INITIALIZED — SUJITH NAVVA // SECURITY ENGINEER // SINGAPORE</span></div>
+<div class="out-divider">────────────────────────────────────────────────────────────────</div>
+`);
+}
+
+function printHelp(silent = false) {
+  if (!silent) printRaw(`<div class="out-cmd"><span class="prompt-echo">visitor@sec-node:~/sujith$ </span>help</div>`);
+  printRaw(`
+<div style="margin:0.5rem 0 0.2rem"><span class="out-cyan">AVAILABLE COMMANDS</span></div>
+${Object.entries(COMMANDS).map(([cmd, {desc}]) => `
+<div class="help-row">
+  <div class="help-cmd">${cmd}</div>
+  <div class="help-desc">— ${desc}</div>
+</div>`).join('')}
+<div class="out-divider" style="margin-top:0.5rem">────────────────────────────────────────────────────────────────</div>
+<div class="out-line" style="margin-top:0.3rem;font-size:12px;color:var(--muted)">TIP: press [TAB] for autocomplete &nbsp;|&nbsp; use [↑↓] for command history</div>
+`);
+}
+
+function execCommand(cmd) {
+  const c = cmd.trim().toLowerCase();
+
+  // echo cmd
+  if (c !== '') {
+    printRaw(`<div class="out-cmd"><span class="prompt-echo">visitor@sec-node:~/sujith$ </span>${escHtml(cmd)}</div>`);
+  }
+
+  switch(c) {
+    case 'help':    printHelp(); break;
+    case 'whoami':  printWhoami(); break;
+    case 'skills':  printSkills(); break;
+    case 'exp':
+    case 'experience': printExperience(); break;
+    case 'projects': printProjects(); break;
+    case 'certs':
+    case 'certifications': printCerts(); break;
+    case 'contact': printContact(); break;
+    case 'clear':
+      document.getElementById('output').innerHTML = '';
+      printBanner();
+      break;
+    case 'banner':  printBanner(); break;
+    case '':        break;
+    default:
+      print(`<span class="out-red">bash: ${escHtml(cmd)}: command not found.</span> Type <span class="out-green">help</span> for available commands.`);
+  }
+}
+
+function printWhoami() {
+  const d = DATA.whoami;
+  printRaw(`
+<div class="out-section-title">// IDENTITY RECORD</div>
+<div class="out-divider">──────────────────────────────────────</div>
+<div style="margin:0.4rem 0">
+  <span class="out-label">NAME     </span> <span class="out-white">${d.name}</span>
+</div>
+<div style="margin:0.2rem 0">
+  <span class="out-label">ROLE     </span> <span class="out-green">${d.title}</span>
+</div>
+<div style="margin:0.2rem 0">
+  <span class="out-label">LOCATION </span> <span class="out-value">${d.location}</span>
+</div>
+<div style="margin:0.2rem 0">
+  <span class="out-label">EMAIL    </span> <span class="out-amber">${d.email}</span>
+</div>
+<div style="margin:0.2rem 0">
+  <span class="out-label">PHONE    </span> <span class="out-value">${d.phone}</span>
+</div>
+<div style="margin:0.6rem 0 0.4rem">
+  <span class="out-label">PROFILE  </span>
+</div>
+<div style="border-left:2px solid var(--green-dark);padding-left:1rem;margin:0.2rem 0;color:#9ecfb0;font-size:13px;line-height:1.8">
+  ${d.summary}
+</div>
+<div class="out-divider" style="margin-top:0.6rem">──────────────────────────────────────</div>
+`);
+}
+
+function printSkills() {
+  let html = `<div class="out-section-title">// TECHNICAL SKILL MATRIX</div>
+<div class="out-divider">──────────────────────────────────────</div>
+<div class="skill-grid" style="margin-top:0.5rem">`;
+  for (const [cat, items] of Object.entries(DATA.skills)) {
+    html += `<div class="skill-cat">
+      <div class="skill-cat-title">${cat}</div>
+      ${items.map(i => `<div class="skill-item">${i}</div>`).join('')}
+    </div>`;
+  }
+  html += `</div><div class="out-divider" style="margin-top:0.6rem">──────────────────────────────────────</div>`;
+  printRaw(html);
+}
+
+function printExperience() {
+  let html = `<div class="out-section-title">// EXPERIENCE TIMELINE</div>
+<div class="out-divider">──────────────────────────────────────</div>`;
+  DATA.experience.forEach(e => {
+    html += `
+<div class="exp-block">
+  <div style="margin-bottom:0.3rem">
+    <span class="out-white" style="font-weight:700">${e.role}</span>
+    <span class="out-dim"> @ </span>
+    <span class="out-amber">${e.org}</span>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:0.5rem">
+    <span>${e.location}</span> &nbsp;·&nbsp; <span class="out-cyan">${e.period}</span>
+  </div>
+  ${e.highlights.map(h => `<div style="font-size:12px;color:#7aaa8a;line-height:1.8;padding-left:0.2rem">› ${h}</div>`).join('')}
+  <div style="margin-top:0.5rem">${e.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+</div>`;
+  });
+  html += `<div class="out-divider" style="margin-top:0.4rem">──────────────────────────────────────</div>`;
+  printRaw(html);
+}
+
+function printProjects() {
+  let html = `<div class="out-section-title">// NOTABLE PROJECTS</div>
+<div class="out-divider">──────────────────────────────────────</div>`;
+  DATA.projects.forEach(p => {
+    html += `
+<div class="proj-block">
+  <div style="margin-bottom:0.25rem">
+    <span class="out-green" style="font-weight:700">${p.name}</span>
+    <span class="out-dim"> — </span>
+    <span class="out-amber" style="font-size:12px">${p.org}</span>
+  </div>
+  <div style="font-size:12px;color:#7aaa8a;line-height:1.7;margin-bottom:0.5rem">${p.desc}</div>
+  <div>${p.tags.map(t => `<span class="tag cyan">${t}</span>`).join('')}</div>
+</div>`;
+  });
+  html += `<div class="out-divider" style="margin-top:0.4rem">──────────────────────────────────────</div>`;
+  printRaw(html);
+}
+
+function printCerts() {
+  let html = `<div class="out-section-title">// CERTIFICATIONS & EDUCATION</div>
+<div class="out-divider">──────────────────────────────────────</div>`;
+  DATA.certifications.forEach(c => {
+    const statusCls = c.status === 'In Progress' ? 'out-amber' : 'out-cyan';
+    const statusIcon = c.status === 'In Progress' ? '⟳' : '✓';
+    html += `
+<div style="margin:0.6rem 0;padding-left:0.8rem;border-left:2px solid var(--green-dark)">
+  <div><span class="out-white" style="font-weight:500">${c.name}</span></div>
+  <div style="font-size:12px;margin-top:0.2rem">
+    <span class="out-dim">${c.issuer}</span>
+    &nbsp;·&nbsp;
+    <span class="${statusCls}">${statusIcon} ${c.status}</span>
+  </div>
+</div>`;
+  });
+  html += `<div class="out-divider" style="margin-top:0.5rem">──────────────────────────────────────</div>`;
+  printRaw(html);
+}
+
+function printContact() {
+  const c = DATA.contact;
+  printRaw(`
+<div class="out-section-title">// CONTACT</div>
+<div class="out-divider">──────────────────────────────────────</div>
+<div style="margin:0.4rem 0"><span class="out-label">EMAIL    </span> <a href="mailto:${c.email}" style="color:var(--amber);text-decoration:none">${c.email}</a></div>
+<div style="margin:0.2rem 0"><span class="out-label">PHONE    </span> <span class="out-value">${c.phone}</span></div>
+<div style="margin:0.2rem 0"><span class="out-label">LOCATION </span> <span class="out-value">${c.location}</span></div>
+<div style="margin:0.2rem 0"><span class="out-label">GITHUB   </span> <a href="${c.github}" target="_blank" style="color:var(--green);text-decoration:none">${c.github}</a></div>
+<div style="margin:0.2rem 0"><span class="out-label">WEB      </span> <a href="${c.web}" target="_blank" style="color:var(--green);text-decoration:none">${c.web}</a></div>
+<div class="out-divider" style="margin-top:0.6rem">──────────────────────────────────────</div>
+<div style="font-size:12px;color:var(--muted);margin-top:0.3rem">Encrypted session active. All messages logged for security audit.</div>
+`);
+}
+
+// ═══════════════════════════════════════════
+// INPUT HANDLING
+// ═══════════════════════════════════════════
+const history = [];
+let histIdx = -1;
+
+const cmdInput = document.getElementById('cmd-input');
+const acBox = document.getElementById('autocomplete');
+let acItems = [];
+let acIdx = -1;
+
+cmdInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const val = cmdInput.value;
+    history.unshift(val);
+    histIdx = -1;
+    execCommand(val);
+    cmdInput.value = '';
+    hideAC();
+  } else if (e.key === 'Tab') {
+    e.preventDefault();
+    handleTab();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (acBox.style.display === 'block') {
+      acIdx = Math.max(0, acIdx - 1);
+      renderAC(true);
+    } else {
+      histIdx = Math.min(histIdx + 1, history.length - 1);
+      if (history[histIdx]) cmdInput.value = history[histIdx];
+    }
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (acBox.style.display === 'block') {
+      acIdx = Math.min(acItems.length - 1, acIdx + 1);
+      renderAC(true);
+    } else {
+      histIdx = Math.max(histIdx - 1, -1);
+      cmdInput.value = histIdx === -1 ? '' : history[histIdx];
+    }
+  } else if (e.key === 'Escape') {
+    hideAC();
+  } else {
+    setTimeout(updateAC, 0);
+  }
+});
+
+// click outside hides AC
+document.addEventListener('click', (e) => {
+  if (!acBox.contains(e.target)) hideAC();
+});
+
+function handleTab() {
+  if (acItems.length === 1) {
+    cmdInput.value = acItems[0];
+    hideAC();
+  } else if (acItems.length > 1) {
+    acIdx = (acIdx + 1) % acItems.length;
+    renderAC(true);
+    cmdInput.value = acItems[acIdx];
+  }
+}
+
+function updateAC() {
+  const val = cmdInput.value.trim().toLowerCase();
+  if (!val) { hideAC(); return; }
+  acItems = Object.keys(COMMANDS).filter(c => c.startsWith(val));
+  if (acItems.length === 0 || (acItems.length === 1 && acItems[0] === val)) { hideAC(); return; }
+  acIdx = -1;
+  renderAC();
+  acBox.style.display = 'block';
+}
+
+function renderAC(highlight = false) {
+  acBox.innerHTML = acItems.map((cmd, i) => `
+    <div class="ac-item ${highlight && i === acIdx ? 'active' : ''}" onclick="selectAC('${cmd}')">
+      <span class="ac-cmd">${cmd}</span><span class="ac-desc out-dim">— ${COMMANDS[cmd].desc}</span>
+    </div>
+  `).join('');
+}
+
+function hideAC() {
+  acBox.style.display = 'none';
+  acItems = [];
+  acIdx = -1;
+}
+
+function selectAC(cmd) {
+  cmdInput.value = cmd;
+  hideAC();
+  cmdInput.focus();
+}
+
+// keep focus on input when clicking terminal
+document.getElementById('terminal').addEventListener('click', () => cmdInput.focus());
+
+// ═══════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════
+function rand(a, b) { return Math.floor(Math.random() * (b - a + 1)) + a; }
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════
+runBoot();
+</script>
+</body>
+</html>
